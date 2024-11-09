@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+ # shellcheck disable=SC2155
 #shopt -s nullglob globstar
 #set -o pipefail
 #set -x
@@ -29,7 +30,7 @@ THINK_PIPE="/tmp/SHELLM_THINK"
 [[ -p $THINK_PIPE ]] || mkfifo $THINK_PIPE
 
 # Remove named pipes on script exit
-trap "rm -f $CHAT_PIPE $THINK_PIPE" EXIT
+trap 'rm -f $CHAT_PIPE $THINK_PIPE' EXIT
 
 # Function for colored logging with severity levels
 log() {
@@ -91,11 +92,11 @@ load_config
 
 # Function to display usage
 usage() {
-  echo "Usage: $0 [-u api_url] [-m MODEL_SMALL] [-n num_predict] [-v] [-t] [prompt]"
+  echo "Usage: $0 [-u api_url] [-m MODEL_SMALL] [-n num_predict] [-v 0-3] [-t] [prompt]"
   echo "  -u    API URL (default: $API_URL)"
   echo "  -m    Model name (default: $MODEL_SMALL)"
   echo "  -n    Number of predictions (default: $NUM_PREDICT)"
-  echo "  -v    Verbose mode (show debug output)"
+  echo "  -v    Verbosity mode (Specify log level from 0-3)"
   echo "  -t    Activate tool use (uses generate_and_apply_tool_calls instead of generate_response)"
   echo "  prompt  Optional prompt (will be prepended if reading from stdin)"
   exit 1
@@ -105,15 +106,16 @@ usage() {
 generate_response() {
   log debug "generate_response"
 
-  local num_predict="$NUM_PREDICT"  # Fallback to global default if not set by -n
+  local num_predict="$NUM_PREDICT"
   local json_format=0  # Flag for JSON format
-  local prompt="$1"
+  local prompt=$(echo "$1" | jq -Rsa .)
+
+  log debug "User prompt: $prompt"
 
   # Escape the prompt and system prompt for JSON
-  local system_prompt
-  system_prompt="${PROMPTS["instruct"]}"
+  local system="${PROMPTS["instruct"]}"
   if [ $json_format -eq 1 ]; then
-    system_prompt+="\n
+    system+="\n
         You MUST return a JSON object with the following structure:
         { \"result\": <VALUE> }
 
@@ -128,25 +130,31 @@ generate_response() {
         Output: { \"result\": \"cow\" }
     "
   fi
-  escaped_system_prompt=$(echo "$system_prompt" | jq -Rsa .)
-  log debug "System prompt: $escaped_system_prompt"
+  system=$(echo "$system" | jq -Rsa .)
+  log debug "System prompt: $system"
 
   options=$(jq -n \
-    --argjson num_predict "$num_predict" \
-    --argjson num_ctx 4096 \
-    --argjson json_format "$json_format" \
+    --arg num_predict "$num_predict" \
+    --arg num_ctx 4096 \
+    --arg json_format "$json_format" \
     '{
-      num_predict: $num_predict,
-      num_ctx: $num_ctx
-    } + if $json_format == 1 then {format: "json"} else {} end'
+      num_predict: $num_predict|tonumber,
+      num_ctx: $num_ctx|tonumber
+    } + if $json_format == 1 then {format: "json"} else {} end' \
   )
-  local escaped_prompt
-  escaped_prompt=$(echo "$prompt" | jq -Rsa .)
-  log debug "User prompt: $escaped_prompt"
+  log debug "Options: $options"
 
+  # Construct the API payload
+  local payload=$(jq -n \
+  --arg model "$MODEL_SMALL" \
+  --arg system "$system" \
+  --arg prompt "$prompt" \
+  --argjson options "$options" \
+  '{model: $model, system: $system, prompt: $prompt, options: $options, stream: true}' \
+  )
   # Capture the output of the streaming request into SHELLM_OUTPUT
   curl -sN "$API_URL/generate" \
-    -d "{\"model\": \"$MODEL_SMALL\", \"system\": $escaped_system_prompt, \"prompt\": $escaped_prompt, \"stream\": true, \"options\": $options }" | \
+    -d "$payload" | \
     stdbuf -o0 jq -j '.response // empty'
   echo ""
 }
@@ -156,28 +164,23 @@ generate_tool_calls() {
 
   log tool "Generating toolchain based on prompt: $prompt"
 
-  local escaped_prompt
-  escaped_prompt=$(echo "${PROMPTS["tool"]}\n# Current Task\n$prompt" | jq -Rsa .)
+  local escaped_prompt=$(echo "${PROMPTS["tool"]}\n# Current Task\n$prompt" | jq -Rsa .)
 
   # Construct the system message
-  local system_message
-  system_message=$(jq -n --arg content "$SYSTEM_PROMPT_TOOL" '{role: "system", content: $content}')
+  local system_message=$(jq -n --arg content "$SYSTEM_PROMPT_TOOL" '{role: "system", content: $content}')
 
   # Construct the tools JSON using jq
-  local tools_json
-  tools_json=$(printf "%s" "${TOOLS[@]}" | jq -s .)
+  local tools_json=$(printf "%s" "${TOOLS[@]}" | jq -s .)
   # Construct the API payload
   local payload
   payload=$(jq -n --arg model "$MODEL_SMALL" --argjson messages "[${system_message}, {\"role\": \"user\", \"content\": $escaped_prompt}]" --argjson tools "$tools_json" \
         '{model: $model, messages: $messages, stream: false, tools: $tools}')
 
   # Make the API call and capture the response
-  local response
-  response=$(curl -s "$API_URL/chat" -d "$payload")
+  local response=$(curl -s "$API_URL/chat" -d "$payload")
   log debug "Response: ${response}"
 
-  local tool_calls
-  tool_calls=$(echo "$response" | jq -c '.message.tool_calls // []')
+  local tool_calls=$(echo "$response" | jq -c '.message.tool_calls // []')
   # Convert tool_calls to a newline-separated list for proper handling
   echo "$tool_calls" | jq -c '.[]'
 }
@@ -310,7 +313,7 @@ fi
 PROMPT="${PROMPT:-Why is the sky blue? Write a short markdown document}"
 
 log debug "Calling $API_URL with $MODEL_SMALL requesting $NUM_PREDICT tokens"
-log debug "Final prompt: $PROMPT"
+#log debug "Final prompt: $PROMPT"
 
 # Function to check if the model exists
 check_model_exists() {

@@ -21,7 +21,8 @@
    ```bash
    chmod +x /usr/local/bin/shellm
    ```
-3. Ensure the Ollama API is running on `localhost:11434` or set the `API_URL` environment variable to your specific endpoint.
+3. Download the [config YAML](https://github.com/Biont/shellm/blob/main/config.yaml) and place it in [one of the recognized paths](https://github.com/Biont/shellm/blob/0141e467e96c6c06d30423bc292282d256a0d5b3/shellm#L68)
+4. Ensure the Ollama API is running on `localhost:11434` or set the `API_URL` environment variable to your specific endpoint.
 
 ## Usage
 
@@ -34,14 +35,14 @@ This will generate a response using the default model.
 
 ### Options
 
-| Option       | Description                                                                                         |
-|--------------|-----------------------------------------------------------------------------------------------------|
-| `-u`         | API URL (default: `http://localhost:11434/api`)                                                     |
-| `-m`         | Model name (default: `qwen2.5:3b-instruct-q5_K_M`)                                                  |
-| `-n`         | Number of predictions to generate (default: `200`)                                                  |
-| `-v`         | Verbose mode for debugging                                                                          |
-| `-t`         | Activate tool use, allowing Shellm to use and chain tools as specified in JSON configuration files. |
-| `prompt`     | The prompt for the model. If reading from stdin, this will prepend to the input.                    |
+| Option     | Description                                                                                         |
+|------------|-----------------------------------------------------------------------------------------------------|
+| `-u`       | API URL (default: `http://localhost:11434/api`)                                                     |
+| `-m`       | Model name (default: `qwen2.5:3b-instruct-q5_K_M`)                                                  |
+| `-n`       | Number of predictions to generate (default: `200`)                                                  |
+| `-v [0-3]` | Log level (verbosity) mode for debugging                                                            |
+| `-t`       | Activate tool use, allowing Shellm to use and chain tools as specified in JSON configuration files. |
+| `prompt`   | The prompt for the model. If reading from stdin, this will prepend to the input.                    |
 
 ### Example Commands
 
