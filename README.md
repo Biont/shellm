@@ -187,9 +187,15 @@ Shellm's tool execution works in multiple steps:
 
 ## Debugging
 
-For verbose output, use the `-v` flag:
+For verbose output, use the `-v` flag and specify the desired log level:
+
+ * `-v 0` - Errors only
+ * `-v 1` - Add warnings
+ * `-v 2` - Add logs specific to tool use
+ * `-v 3` - Add debug output
+
 ```bash
-shellm -v "Debug the script behavior."
+shellm -v 3 "Debug the script behavior."
 ```
 ## About the name
 
