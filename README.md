@@ -108,55 +108,57 @@ journalctl -xe | shellm -t "Translate this to Spanish."
 Shellm supports user-defined tools specified in JSON files. This allows Shellm to perform operations beyond simple language model predictions, such as executing shell commands or interacting with APIs. 
 This functionality is highly experimental and new tools will be added as soon as the underlying tool pipeline is more robust.
 
-A `tools.json` file can be created in the following directories (priority order):
+Tools are read from the `config.yaml` file which is searched in the following directories (priority order):
 
-1. `$XDG_CONFIG_HOME/shellm/tools.json`
-2. `~/.config/shellm/tools.json`
-3. `~/tools.json`
-4. `$(dirname "$0")/tools.json` (same directory as the script)
+1. `$XDG_CONFIG_HOME/shellm/config.yaml`
+2. `~/.config/shellm/config.yaml`
+3. `~/config.yaml`
+4. `$(dirname "$0")/config.yaml` (same directory as the script)
 
 #### Tool Definition Example
 
-Here’s a sample `tools.json` configuration:
-```json
-{
-  "execute_shell_command": {
-    "type": "function",
-    "function": {
-      "name": "execute_shell_command",
-      "description": "Constructs a shell command with arguments to carry out the request.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "command": {
-            "type": "string",
-            "description": "The shell command to execute. Bash syntax is allowed"
-          }
-        },
-        "required": ["command"]
-      },
-      "exec": "bash -c \"${command}\""
-    }
-  },
-  "say": {
-    "type": "function",
-    "function": {
-      "name": "say",
-      "description": "Display a static message to the user.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "The message to display. Remember you can use $SHELLM_PREVIOUS here to display output of previous tools."
-          }
-        },
-        "required": ["message"]
-      },
-      "exec": "echo \"${message}\""
-    }
-  }
-}
+Here’s a sample tool configuration within `config.yaml`:
+```yaml
+execute_shell_command:
+  type: function
+  function:
+     name: execute_shell_command
+     description: >-
+        Executes the specified shell command. Bash syntax allowed. The command string must be complete with all arguments, parameters, redirections and pipes. Multi-line commands are allowed.
+     parameters:
+        type: object
+        properties:
+           command:
+              type: string
+              description: >-
+                 The shell command with all arguments. Warning: It is passed into eval as-is.
+              raw: true
+        required:
+           - command
+     exec: '{{command}}'
+generate:
+  type: function
+  function:
+     name: generate
+     description: Display LLM-generated output to the user.
+     parameters:
+        type: object
+        properties:
+           prompt:
+              type: string
+              description: >-
+                 The prompt to be passed to the completion endpoint. Supports both
+                 Chat-like instructions and generic prediction/completion.
+           json:
+              type: boolean
+              description: >-
+                 Set to true to format the output as JSON. Works only if JSON is also
+                 used in the prompt
+        required:
+           - prompt
+     # language=sh
+     exec: |
+        generate_response "{{prompt}}" 200
 ```
 
 #### Example Tool Usage
