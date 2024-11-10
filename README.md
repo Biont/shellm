@@ -52,12 +52,6 @@ Generate a response to a simple question:
 shellm "Why is the sky blue?"
 ```
 
-#### Verbose Mode
-Enable verbose mode for debugging:
-```bash
-shellm -v "Explain the theory of relativity in simple terms."
-```
-
 #### Custom Model
 Use a different model:
 ```bash
