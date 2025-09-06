@@ -3,7 +3,7 @@ FROM archlinux:latest
 
 # Set environment variables
 ENV API_URL="http://localhost:11434/api"
-ENV MODEL_SMALL="gemma3:270m"
+ENV SHELLM_MODEL="gemma3:270m"
 ENV NUM_PREDICT=500
 ENV VERBOSE=2
 

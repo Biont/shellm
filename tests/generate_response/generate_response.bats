@@ -5,7 +5,7 @@
 setup() {
   # Set default environment variables if not set
   export API_URL="${API_URL:-http://localhost:11434/api}"
-  export MODEL_SMALL="${MODEL_SMALL:-qwen2.5:3b-instruct-q5_K_M}"
+  export SHELLM_MODEL="${SHELLM_MODEL:-qwen2.5:3b-instruct-q5_K_M}"
   export NUM_PREDICT="${NUM_PREDICT:-500}"
   export VERBOSE="${VERBOSE:-2}"
 

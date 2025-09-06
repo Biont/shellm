@@ -5,7 +5,7 @@
 #set -x
 # Default Variables
 API_URL="${API_URL:-http://localhost:11434/api}"  # Read API_URL from environment or use default
-MODEL_SMALL="${MODEL_SMALL:-qwen2.5:3b-instruct-q5_K_M}"  # Read API_URL from environment or use default
+SHELLM_MODEL="${SHELLM_MODEL:-qwen2.5:3b-instruct-q5_K_M}"  # Rename MODEL_SMALL to SHELLM_MODEL
 NUM_PREDICT=500  # Default number of predictions
 VERBOSE=2  # Default Errors, Warnings and Tools
 SCRIPT_PATH=$(dirname "$(realpath -s "$0")")
@@ -47,9 +47,9 @@ escape() {
 
 # Function to display usage
 usage() {
-  echo "Usage: $0 [-u api_url] [-m MODEL_SMALL] [-n num_predict] [-v 0-3] [prompt]"
+  echo "Usage: $0 [-u api_url] [-m SHELLM_MODEL] [-n num_predict] [-v 0-3] [prompt]"
   echo "  -u    API URL (default: $API_URL)"
-  echo "  -m    Model name (default: $MODEL_SMALL)"
+  echo "  -m    Model name (default: $SHELLM_MODEL)"
   echo "  -n    Number of predictions (default: $NUM_PREDICT)"
   echo "  -v    Verbosity mode (Specify log level from 0-3)"
   echo "  prompt  Optional prompt (will be prepended if reading from stdin)"
@@ -100,7 +100,7 @@ generate_response() {
 
   # Construct the API payload
   local payload=$(jq -n \
-  --arg model "$MODEL_SMALL" \
+  --arg model "$SHELLM_MODEL" \
   --arg system "$system" \
   --arg prompt "$prompt" \
   --argjson options "$options" \
@@ -117,7 +117,7 @@ generate_response() {
 while getopts ":u:m:n:v:h" opt; do
   case $opt in
     u) API_URL="$OPTARG" ;;
-    m) MODEL_SMALL="$OPTARG" ;;
+    m) SHELLM_MODEL="$OPTARG" ;;
     n) NUM_PREDICT="$OPTARG" ;;
     v) VERBOSE="$OPTARG" ;;  # Set verbose mode
     h) usage ;;
@@ -125,16 +125,10 @@ while getopts ":u:m:n:v:h" opt; do
     :) log error "Option -$OPTARG requires an argument."; usage ;;
   esac
 done
-
-# Determine execution path based on arguments
-shift $((OPTIND - 1))
-if [[ $# -eq 2 ]]; then
-  FUNC="$1"; shift
-  type "$FUNC" &>/dev/null && "$FUNC" "$@" || { log error "Function '$FUNC' not found"; exit 1; }
-fi
+shift $((OPTIND-1))
 
 # Handle the prompt as a positional argument
-PROMPT="$*"
+PROMPT="$1"
 
 # If input is provided via stdin, prepend the optional prompt
 if [ ! -t 0 ]; then
@@ -146,19 +140,18 @@ fi
 PROMPT="${PROMPT:-Why is the sky blue? Write a short markdown document}"
 
 log debug "Calling $API_URL with $MODEL_SMALL requesting $NUM_PREDICT tokens"
-#log debug "Final prompt: $PROMPT"
 
 # Function to check if the model exists
 check_model_exists() {
   local model_check
-  log debug "Checking if model $MODEL_SMALL exists on API server..."
-  model_check=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/show" -d "{\"model\": \"$MODEL_SMALL\"}")
+  log debug "Checking if model $SHELLM_MODEL exists on API server..."
+  model_check=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/show" -d "{\"model\": \"$SHELLM_MODEL\"}")
 
   if [[ "$model_check" == "200" ]]; then
-    log debug "Model $MODEL_SMALL exists."
+    log debug "Model $SHELLM_MODEL exists."
     return 0
   else
-    log warning "Model $MODEL_SMALL does not exist. Attempting to pull..."
+    log warning "Model $SHELLM_MODEL does not exist. Attempting to pull..."
     return 1
   fi
 }
@@ -166,13 +159,13 @@ check_model_exists() {
 # Function to pull the model
 pull_model() {
   local pull_response
-  log debug "Attempting to pull model $MODEL_SMALL..."
-  pull_response=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/pull" -d "{\"model\": \"$MODEL_SMALL\", \"stream\": false}")
+  log debug "Attempting to pull model $SHELLM_MODEL..."
+  pull_response=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/pull" -d "{\"model\": \"$SHELLM_MODEL\", \"stream\": false}")
 
   if [[ "$pull_response" == "200" ]]; then
-    log debug "Successfully pulled model $MODEL_SMALL."
+    log debug "Successfully pulled model $SHELLM_MODEL."
   else
-    log error "Error pulling model $MODEL_SMALL. HTTP Status: $pull_response"
+    log error "Error pulling model $SHELLM_MODEL. HTTP Status: $pull_response"
     exit 1
   fi
 }
@@ -181,5 +174,5 @@ pull_model() {
 if ! check_model_exists; then
   pull_model
 fi
-
+echo "$PROMPT"
 generate_response "$PROMPT" "$NUM_PREDICT"
