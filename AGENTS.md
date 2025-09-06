@@ -8,7 +8,9 @@ It provides a simple interface to generate responses from language models, inter
 ### It is self-contained
 It works with pure bash and coreutils and is contained all within one file.
 
-##
+## Testing
+
+This repository contains test cases in the tests/ folder 
 
 
 ## Usage
@@ -28,7 +30,6 @@ This will generate a response using the default model.
 | `-m`       | Model name (default: `qwen2.5:3b-instruct-q5_K_M`)                                                  |
 | `-n`       | Number of predictions to generate (default: `200`)                                                  |
 | `-v [0-3]` | Log level (verbosity) mode for debugging                                                            |
-| `-t`       | Activate tool use, allowing Shellm to use and chain tools as specified in JSON configuration files. |
 | `prompt`   | The prompt for the model. If reading from stdin, this will prepend to the input.                    |
 
 ## Advanced Usage
@@ -52,14 +53,3 @@ To summarize the contents of a file:
 cat myfile.txt | shellm "Summarize this text"
 ```
 
-#### Example: AI-Powered Directory Listing
-Generate a human-readable summary of files in a directory:
-```bash
-ls -l | shellm "Explain what these files are."
-```
-
-#### Example: Translating System Logs
-To translate system logs to another language:
-```bash
-journalctl -xe | shellm "Translate this to Spanish."
-```
