@@ -11,10 +11,6 @@ VERBOSE=2  # Default Errors, Warnings and Tools
 USE_TOOL=0
 SCRIPT_PATH=$(dirname "$(realpath -s "$0")")
 
-# Global associative array for tools and prompts
-declare -A PROMPTS=()
-declare -A TOOLS=()
-
 # Output variables
 SHELLM_OUTPUT=""
 SHELLM_PREVIOUS=""
@@ -37,14 +33,12 @@ log() {
   local level="$1"; local message="\e[37m$(echo "$2" | tr '\n' ' ' )\e[0m"; local color
   case "$level" in
     debug) color="\e[33m[DEBUG]\e[0m" ;;
-    tool) color="\e[36m[TOOL]\e[0m" ;;
     warning) color="\e[35m[WARNING]\e[0m" ;;
     error) color="\e[31m[ERROR]\e[0m" ;;
     *) color="\e[0m" ;;
   esac
   [[ $VERBOSE -gt 0 && "$level" == "error" ]] && echo -e "\n$color $message" >&2
   [[ $VERBOSE -gt 1 && "$level" == "warning" ]] && echo -e "\n$color $message" >&2
-  [[ $VERBOSE -gt 2 && "$level" == "tool" ]] && echo -e "\n$color $message" >&2
   [[ $VERBOSE -gt 3 && "$level" == "debug" ]] && echo -e "\n$color $message" >&2
 }
 
@@ -64,40 +58,13 @@ escape() {
   echo "$escaped_input"
 }
 
-# Function to load tools from YAML file
-load_config() {
-  local config_paths=("$XDG_CONFIG_HOME/shellm/config.yaml" "$HOME/.config/shellm/config.yaml" "$HOME/config.yaml" "$(pwd)/config.yaml")
-  local merged_config_json="{}"
-  for path in "${config_paths[@]}"; do
-    [[ -f $path ]] && merged_config_json=$(yq -s '.[0] * .[1]' <(echo "$merged_config_json") "$path") && log debug "Loaded config from $path"
-  done
-
-  # Extract tools sub-field from the config
- local tools_json=$(echo "$merged_config_json" | jq -c '.tools | to_entries[]')
-  readarray -t tool_entries <<< "$tools_json"
-  for tool in "${tool_entries[@]}"; do
-    TOOLS["$(echo "$tool" | jq -r '.key')"]="$(echo "$tool" | jq -r '.value')"
-  done
-  # Extract prompts and populate the PROMPTS array
-  local prompts_json=$(echo "$merged_config_json" | jq '.prompts')
-  readarray -t prompt_entries < <(echo "$prompts_json" | jq -c 'to_entries[]')
-  for prompt in "${prompt_entries[@]}"; do
-    PROMPTS["$(echo "$prompt" | jq -r '.key')"]="$(echo "$prompt" | jq -r '.value')"
-  done
-
-}
-
-# Initialize the tools by loading them from the JSON file
-load_config
-
 # Function to display usage
 usage() {
-  echo "Usage: $0 [-u api_url] [-m MODEL_SMALL] [-n num_predict] [-v 0-3] [-t] [prompt]"
+  echo "Usage: $0 [-u api_url] [-m MODEL_SMALL] [-n num_predict] [-v 0-3] [prompt]"
   echo "  -u    API URL (default: $API_URL)"
   echo "  -m    Model name (default: $MODEL_SMALL)"
   echo "  -n    Number of predictions (default: $NUM_PREDICT)"
   echo "  -v    Verbosity mode (Specify log level from 0-3)"
-  echo "  -t    Activate tool use (uses generate_and_apply_tool_calls instead of generate_response)"
   echo "  prompt  Optional prompt (will be prepended if reading from stdin)"
   exit 1
 }
@@ -113,7 +80,7 @@ generate_response() {
   log debug "User prompt: $prompt"
 
   # Escape the prompt and system prompt for JSON
-  local system="${PROMPTS["instruct"]}"
+  local system=""
   if [ $json_format -eq 1 ]; then
     system+="\n
         You MUST return a JSON object with the following structure:
@@ -159,134 +126,13 @@ generate_response() {
   echo ""
 }
 
-generate_tool_calls() {
-  local prompt="$1"
-
-  log tool "Generating toolchain based on prompt: $prompt"
-
-  local escaped_prompt=$(echo "${PROMPTS["tool"]}\n# Current Task\n$prompt" | jq -Rsa .)
-
-  # Construct the system message
-  local system_message=$(jq -n --arg content "$SYSTEM_PROMPT_TOOL" '{role: "system", content: $content}')
-
-  # Construct the tools JSON using jq
-  local tools_json=$(printf "%s" "${TOOLS[@]}" | jq -s .)
-  # Construct the API payload
-  local payload
-  payload=$(jq -n --arg model "$MODEL_SMALL" --argjson messages "[${system_message}, {\"role\": \"user\", \"content\": $escaped_prompt}]" --argjson tools "$tools_json" \
-        '{model: $model, messages: $messages, stream: false, tools: $tools}')
-
-  # Make the API call and capture the response
-  local response=$(curl -s "$API_URL/chat" -d "$payload")
-  log debug "Response: ${response}"
-
-  local tool_calls=$(echo "$response" | jq -c '.message.tool_calls // []')
-  # Convert tool_calls to a newline-separated list for proper handling
-  echo "$tool_calls" | jq -c '.[]'
-}
-
-# Apply a list of tool call definitions
-# Assuming you have a list of tool calls in JSON format, you can pass them directly to apply_tool_calls.
-# For example:
-#
-# tool_calls=(
-#   '{"function":{"name":"get_current_day"}}'
-#   '{"function":{"name":"generate","arguments":{"prompt":"Please write a poem about $SHELLM_PREVIOUS."}}}'
-#   '{"function":{"name":"say","arguments":{"message":"$SHELLM_PREVIOUS"}}}'
-# )
-#
-# apply_tool_calls "${tool_calls[@]}"
-#
-apply_tool_calls() {
-  local tool_calls_array=("$@")
-  log debug "Tool calls: ${tool_calls_array[*]}"
-  for tool_call in "${tool_calls_array[@]}"; do
-    log debug "Processing tool_call $tool_call"
-    local tool_name
-    tool_name=$(echo "$tool_call" | jq -r '.function.name')
-
-    # Fetch the corresponding tool definition
-    local tool_def="${TOOLS[$tool_name]}"
-    log tool "Calling '$tool_name'"
-    if [ -z "$tool_def" ]; then
-      log error "Error: Tool '$tool_name' not found in TOOLS array."
-      exit 1
-    fi
-
-    # Fetch the 'exec' command template
-    local exec_cmd_template
-    exec_cmd_template=$(echo "$tool_def" | jq -rc '.function.exec')
-
-    # Interpolate parameters from tool_call into the exec command
-    local interpolated_cmd="$exec_cmd_template"
-    local parameters
-    parameters=$(echo "$tool_call" | jq -c '.function.arguments // {}')
-
-    # Iterate over each parameter and replace placeholders in the command
-    for param in $(echo "$parameters" | jq -r 'keys[]'); do
-      local value
-      value=$(echo "$parameters" | jq -r --arg param "$param" '.[$param]')
-
-      # Check if escaping is required
-      local raw
-      raw=$(echo "$tool_def" | jq -r --arg param "$param" '.function.parameters.properties[$param].raw // false')
-      log debug "Parameter: $param, Value: $value, Raw: $raw"
-      value="${value//&/\\&}"  # Escape ampersands
-      # Conditionally escape or pass as-is based on the "escape" field
-      if [[ ! "$raw" == "true" ]]; then
-        log debug "Escaping parameter: $param"
-        value="$(echo "$value" | escape)"
-
-      fi
-      # Replace {{parameter}} syntax with actual values
-      interpolated_cmd="${interpolated_cmd//\{\{$param\}\}/$value}"
-    done
-
-    # Interpolate SHELLM_PREVIOUS and SHELLM_OUTPUT
-    interpolated_cmd="${interpolated_cmd//\{\{SHELLM_PREVIOUS\}\}/$SHELLM_PREVIOUS}"
-    interpolated_cmd="${interpolated_cmd//\{\{SHELLM_OUTPUT\}\}/$SHELLM_OUTPUT}"
-
-
-    log tool "Executing command: $interpolated_cmd"
-    #generate_response "You are the inner monologue of the AI. You keep concise records of past and future actions to improve your world model. This future action must be summarized into human language and condensed into a single bullet point, starting with \"I will\": ('$interpolated_cmd')"
-    # Execute the interpolated command, capturing all details
-    exit_code=0
-
-    # Use a subshell to redirect stdout and stderr
-    {
-      SHELLM_PREVIOUS=$(eval "$interpolated_cmd")
-      exit_code=$?
-    } 2> >(SHELLM_ERROR=$(cat) >&2)
-
-    log tool "Exit: $exit_code"
-
-    # Check for a nonzero exit code and echo errors if present
-    if [[ $exit_code -ne 0 ]]; then
-      log error "Command '$interpolated_cmd' failed with exit code $exit_code."
-      log error "$SHELLM_ERROR"
-      # TODO Consider recursion with a fresh prompt to allow the agent to try again
-      exit 1
-    else
-      log tool "Result: $SHELLM_PREVIOUS"
-    fi
-    echo "$SHELLM_PREVIOUS" > /dev/tty
-    SHELLM_OUTPUT+=$SHELLM_PREVIOUS
-  done
-}
-
-# Generate a toolchain based on a prompt. Then immediately apply it
-generate_and_apply_tool_calls() {
-  mapfile -t tool_calls_array < <(generate_tool_calls "$1")
-  apply_tool_calls "${tool_calls_array[@]}"
-}
 # Parse command line options
-while getopts ":u:m:n:v:th" opt; do
+while getopts ":u:m:n:v:h" opt; do
   case $opt in
     u) API_URL="$OPTARG" ;;
     m) MODEL_SMALL="$OPTARG" ;;
     n) NUM_PREDICT="$OPTARG" ;;
     v) VERBOSE="$OPTARG" ;;  # Set verbose mode
-    t) USE_TOOL=1 ;;  # Set tool use flag
     h) usage ;;
     \?) log error "Invalid option: -$OPTARG"; usage ;;
     :) log error "Option -$OPTARG requires an argument."; usage ;;
@@ -344,74 +190,9 @@ pull_model() {
   fi
 }
 
-# Function to gather system information
-gather_system_info() {
-  local terminal_info
-  local os_info
-
-  # Gather terminal, hostname, and OS type information
-  terminal_info=$(echo "$TERM")
-  os_info=$(cat /etc/os-release)  # Get the OS type
-
-  # Create a formatted output
-  echo "Terminal: $terminal_info\nOS Type: $os_info"
-}
-
-#tool_calls=(
-#   '{"function":{"name":"while","arguments":{"predicate":"The joke was considered funny","tools":[{"function":{"name":"say","arguments":{"message":"Hi"}}},{"function":{"name":"ask","arguments":{"question":"Was the joke funny?"}}}]}}}'
-# )
-#apply_tool_calls "${tool_calls[@]}"
-#exit
-
 # Check if the model exists, if not, pull it
 if ! check_model_exists; then
   pull_model
 fi
 
-# Call the appropriate function based on tool usage
-if [ "$USE_TOOL" -eq 1 ]; then
-  escaped_description_prompt=$(
-    jq \
-    --arg prompt "$PROMPT" \
-    -n '"Create a sharp and concise title of the following assignment: \($prompt) "'
-  )
-  escaped_system_prompt=$(
-    jq -n \
-      --arg prompt "${PROMPTS["tool_context"]}" \
-      --arg sysinfo "$(gather_system_info)" \
-      --arg user_prompt "$PROMPT" \
-      '"#Assignment\n\($prompt)\n\n# System Info:\n\($sysinfo)\n\n# User request:\n\($user_prompt)"'
-  )
-  tool_calls=(
-     "$(jq -n --argjson prompt "$escaped_description_prompt" \
-               '{"function":{"name":"generate","arguments":{"prompt":$prompt}}}')"
-     "$(jq -n --argjson prompt "$escaped_system_prompt" \
-               '{"function":{"name":"generate","arguments":{"prompt":$prompt}}}')"
-     "$(jq -n --argjson empty "$escaped_system_prompt" \
-               '{"function":{"name":"say","arguments":{"message":"\n# Workflow results\n\n"}}}')"
-  )
-
-  apply_tool_calls "${tool_calls[@]}"
-
-  toolchain_prompt=$(
-    jq -n \
-    --arg prompt "$PROMPT"  \
-    --arg previous "$SHELLM_PREVIOUS" \
-    '"The request of the user is \($prompt)\n# Execution plan\n\($previous)"'
-  )
-  generate_and_apply_tool_calls "$toolchain_prompt"
-
-  # Construct tool call JSON with jq
-  tool_calls=(
-   "$(jq -n --argjson empty "$escaped_system_prompt" \
-             '{"function":{"name":"say","arguments":{"message":"\n# Review\n\n"}}}')"
-    "$(jq -n \
-    --arg output "$SHELLM_OUTPUT" \
-    '{"function": {"name": "generate", "arguments": {"prompt": "# Task\n\nProvide a brief summary of the following content\n\n#Content\n\n\($output)\n\n## Summary:\n\n"}}}')"
-  )
-
-  apply_tool_calls "${tool_calls[@]}"
-  exit
-else
-  generate_response "$PROMPT" "$NUM_PREDICT"
-fi
+generate_response "$PROMPT" "$NUM_PREDICT"
