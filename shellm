@@ -8,7 +8,6 @@ API_URL="${API_URL:-http://localhost:11434/api}"  # Read API_URL from environmen
 MODEL_SMALL="${MODEL_SMALL:-qwen2.5:3b-instruct-q5_K_M}"  # Read API_URL from environment or use default
 NUM_PREDICT=500  # Default number of predictions
 VERBOSE=2  # Default Errors, Warnings and Tools
-USE_TOOL=0
 SCRIPT_PATH=$(dirname "$(realpath -s "$0")")
 
 # Output variables
