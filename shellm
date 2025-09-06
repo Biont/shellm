@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
- # shellcheck disable=SC2155
+# shellcheck disable=SC2155
 #shopt -s nullglob globstar
 #set -o pipefail
 #set -x
@@ -15,18 +15,6 @@ SCRIPT_PATH=$(dirname "$(realpath -s "$0")")
 SHELLM_OUTPUT=""
 SHELLM_PREVIOUS=""
 SHELLM_ERROR=""
-
-# Named pipes for inter-process communication
-CHAT_PIPE="/tmp/SHELLM_CHAT"
-THINK_PIPE="/tmp/SHELLM_THINK"
-
-# Create named pipes if they don't exist
-[[ -p $CHAT_PIPE ]] || mkfifo $CHAT_PIPE
-# TODO: Read from input so that thought processed can be chained by piping
-[[ -p $THINK_PIPE ]] || mkfifo $THINK_PIPE
-
-# Remove named pipes on script exit
-trap 'rm -f $CHAT_PIPE $THINK_PIPE' EXIT
 
 # Function for colored logging with severity levels
 log() {
