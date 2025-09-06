@@ -7,7 +7,7 @@
 API_URL="${API_URL:-http://localhost:11434/api}"  # Read API_URL from environment or use default
 SHELLM_MODEL="${SHELLM_MODEL:-qwen2.5:3b-instruct-q5_K_M}"  # Rename MODEL_SMALL to SHELLM_MODEL
 NUM_PREDICT=500  # Default number of predictions
-VERBOSE=2  # Default Errors, Warnings and Tools
+VERBOSE=2  # Default Errors, Warnings
 SCRIPT_PATH=$(dirname "$(realpath -s "$0")")
 
 # Output variables

@@ -8,8 +8,6 @@
 
 - **Single File Script**: No complex dependencies—just a single Bash file.
 - **API Integration**: Interacts with an Ollama API server to generate predictions.
-- **Tool Execution**: Support for toolchain execution using custom JSON-defined tools.
-- **Expandable**: Tools are read from `config.yaml` files according to XDG Base Dir spec. Add your own!
 - **Model Download**: Transparently instructs Ollama to download unknown models
 - **Piping and Chaining**: Seamless integration into shell commands for input/output manipulation.
 - **Verbose Mode**: Detailed debugging for troubleshooting or learning.
@@ -40,8 +38,7 @@ This will generate a response using the default model.
 | `-u`       | API URL (default: `http://localhost:11434/api`)                                                     |
 | `-m`       | Model name (default: `qwen2.5:3b-instruct-q5_K_M`)                                                  |
 | `-n`       | Number of predictions to generate (default: `200`)                                                  |
-| `-v [0-3]` | Log level (verbosity) mode for debugging                                                            |
-| `-t`       | Activate tool use, allowing Shellm to use and chain tools as specified in JSON configuration files. |
+| `-v [0-2]` | Log level (verbosity) mode for debugging                                                            |
 | `prompt`   | The prompt for the model. If reading from stdin, this will prepend to the input.                    |
 
 ### Example Commands
@@ -61,7 +58,7 @@ shellm -m "newmodel-v1:6b" "Summarize the plot of 'The Great Gatsby'."
 #### Use Tools
 Enable tool usage mode:
 ```bash
-shellm -t "Translate the following text to French: 'Hello, how are you?'"
+shellm "Translate the following text to French: 'Hello, how are you?'"
 ```
 
 ## Advanced Usage
@@ -94,81 +91,8 @@ ls -l | shellm "Explain what these files are."
 #### Example: Translating System Logs
 To translate system logs to another language:
 ```bash
-journalctl -xe | shellm -t "Translate this to Spanish."
+journalctl -xe | shellm "Translate this to Spanish."
 ```
-
-### Tool Calling
-
-Shellm supports user-defined tools specified in JSON files. This allows Shellm to perform operations beyond simple language model predictions, such as executing shell commands or interacting with APIs. 
-This functionality is highly experimental and new tools will be added as soon as the underlying tool pipeline is more robust.
-
-Tools are read from the `config.yaml` file which is searched in the following directories (priority order):
-
-1. `$XDG_CONFIG_HOME/shellm/config.yaml`
-2. `~/.config/shellm/config.yaml`
-3. `~/config.yaml`
-4. `$(dirname "$0")/config.yaml` (same directory as the script)
-
-#### Tool Definition Example
-
-Here’s a sample tool configuration within `config.yaml`:
-```yaml
-execute_shell_command:
-  type: function
-  function:
-     name: execute_shell_command
-     description: >-
-        Executes the specified shell command. Bash syntax allowed. The command string must be complete with all arguments, parameters, redirections and pipes. Multi-line commands are allowed.
-     parameters:
-        type: object
-        properties:
-           command:
-              type: string
-              description: >-
-                 The shell command with all arguments. Warning: It is passed into eval as-is.
-              raw: true
-        required:
-           - command
-     exec: '{{command}}'
-generate:
-  type: function
-  function:
-     name: generate
-     description: Display LLM-generated output to the user.
-     parameters:
-        type: object
-        properties:
-           prompt:
-              type: string
-              description: >-
-                 The prompt to be passed to the completion endpoint. Supports both
-                 Chat-like instructions and generic prediction/completion.
-           json:
-              type: boolean
-              description: >-
-                 Set to true to format the output as JSON. Works only if JSON is also
-                 used in the prompt
-        required:
-           - prompt
-     # language=sh
-     exec: |
-        generate_response "{{prompt}}" 200
-```
-
-#### Example Tool Usage
-When tools are enabled (`-t` flag), Shellm can chain tool calls. Example:
-
-```bash
-shellm -t "Get the current date and time and tell me if it's a weekend."
-```
-
-### Tool Execution Workflow
-
-Shellm's tool execution works in multiple steps:
-
-1. **Parse Request**: The initial prompt is analyzed, and the AI identifies which tools to use.
-2. **Tool Execution**: Shellm executes the tools in sequence, using their output for the next tool if necessary.
-3. **Final Output**: The result is formatted and presented using a final `say` tool call.
 
 ## Environment Variables
 
@@ -177,7 +101,6 @@ Shellm's tool execution works in multiple steps:
 | `API_URL`       | URL of the Ollama API                          | `http://localhost:11434/api`         |
 | `MODEL_SMALL`   | Default model to use                           | `qwen2.5:3b-instruct-q5_K_M`         |
 | `VERBOSE`       | Enable verbose output                          | `0`                                  |
-| `USE_TOOL`      | Enable tool usage mode                         | `0`                                  |
 
 ## Debugging
 
@@ -185,11 +108,10 @@ For verbose output, use the `-v` flag and specify the desired log level:
 
  * `-v 0` - Errors only
  * `-v 1` - Add warnings
- * `-v 2` - Add logs specific to tool use
- * `-v 3` - Add debug output
+ * `-v 2` - Add debug output
 
 ```bash
-shellm -v 3 "Debug the script behavior."
+shellm -v 2 "Debug the script behavior."
 ```
 ## About the name
 
