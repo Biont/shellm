@@ -45,3 +45,15 @@ teardown() {
   # Check for error output
   [[ "$output" == *"[ERROR]"* ]]
 }
+
+# Test: generate_response with piping from stdin
+@test "generate_response with piping from stdin" {
+  # Define the test prompt to be piped in
+  local prompt="What is the capital of France?"
+
+  # Run function and expect success
+  run bats_pipe "$prompt" \| ./shellm
+
+  # Check that some output was produced
+  [[ -n "$output" ]]
+}
