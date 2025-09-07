@@ -178,4 +178,4 @@ if ! check_model_exists; then
   pull_model
 fi
 
-generate_response "$PROMPT" "$NUM_PREDICT"
+generate_response "$PROMPT"
