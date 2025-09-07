@@ -136,8 +136,11 @@ if [ ! -t 0 ]; then
   PROMPT="${PROMPT}${PROMPT:+ }${STDIN_INPUT}"
 fi
 
-# Default prompt if none was provided
-PROMPT="${PROMPT:-Why is the sky blue? Write a short markdown document}"
+# Check if the prompt is empty and exit with an error message if it is empty
+if [ -z "$PROMPT" ]; then
+  log error "No prompt provided. Please provide a prompt as an argument or via stdin."
+  exit 1
+fi
 
 log debug "Calling $API_URL with $MODEL_SMALL requesting $NUM_PREDICT tokens"
 
@@ -174,5 +177,5 @@ pull_model() {
 if ! check_model_exists; then
   pull_model
 fi
-echo "$PROMPT"
+
 generate_response "$PROMPT" "$NUM_PREDICT"
