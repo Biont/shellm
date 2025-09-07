@@ -47,11 +47,11 @@ escape() {
 
 # Function to display usage
 usage() {
-  echo "Usage: $0 [-u api_url] [-m SHELLM_MODEL] [-n num_predict] [-v 0-3] [prompt]"
+  echo "Usage: $0 [-u api_url] [-m SHELLM_MODEL] [-n num_predict] [-v 0-2] [prompt]"
   echo "  -u    API URL (default: $API_URL)"
   echo "  -m    Model name (default: $SHELLM_MODEL)"
   echo "  -n    Number of predictions (default: $NUM_PREDICT)"
-  echo "  -v    Verbosity mode (Specify log level from 0-3)"
+  echo "  -v    Verbosity mode (Specify log level from 0-2)"
   echo "  prompt  Optional prompt (will be prepended if reading from stdin)"
   exit 1
 }
