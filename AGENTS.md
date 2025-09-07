@@ -6,7 +6,7 @@ It provides a simple interface to generate responses from language models, inter
 ## Specs
 
 ### It is self-contained
-It works with pure bash and coreutils and is contained all within one file.
+With the sole exception of 'jq', it works with pure bash and coreutils and is contained all within one file.
 
 ## Testing
 
